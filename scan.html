@@ -1,1 +1,90 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QR skaner</title>
 
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 16px;
+      background: var(--tg-theme-bg-color, #ffffff);
+      color: var(--tg-theme-text-color, #222222);
+    }
+    h2 { font-size: 24px; }
+    #reader { width: 100%; max-width: 400px; margin: 20px auto; }
+    #status { margin: 16px; }
+  </style>
+</head>
+<body>
+  <h2>📷 QR skaner</h2>
+  <p>Abonent QR-kodini kameraga ko‘rsating.</p>
+  <div id="reader"></div>
+  <p id="status">Kamera ishga tushmoqda...</p>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+
+    let scanner;
+    let sent = false;
+
+    async function startScanner() {
+      const status = document.getElementById("status");
+
+      try {
+        scanner = new Html5Qrcode("reader");
+
+        const cameras = await Html5Qrcode.getCameras();
+
+        if (!cameras || cameras.length === 0) {
+          status.textContent = "Kamera topilmadi. Kamera ruxsatini tekshiring.";
+          return;
+        }
+
+        const camera = cameras.find(c =>
+          /back|rear|environment|orqa/i.test(c.label)
+        ) || cameras[cameras.length - 1];
+
+        await scanner.start(
+          camera.id,
+          { fps: 10, qrbox: { width: 240, height: 240 } },
+          async (decodedText) => {
+            if (sent) return;
+
+            const match = decodedText.match(/\d{11}/);
+            if (!match) {
+              status.textContent = "QR ichida abonent raqami topilmadi.";
+              return;
+            }
+
+            sent = true;
+            status.textContent = "Abonent: " + match[0] + ". Botga yuborilmoqda...";
+
+            try {
+              await scanner.stop();
+            } catch (_) {}
+
+            tg.sendData(match[0]);
+            status.textContent = "Yuborildi. Botga qayting.";
+          },
+          () => {}
+        );
+
+        status.textContent = "Kamera tayyor. QR-kodni ko‘rsating.";
+      } catch (err) {
+        status.textContent =
+          "Kamera ochilmadi: " + (err.message || String(err));
+      }
+    }
+
+    startScanner();
+  </script>
+</body>
+</html>
